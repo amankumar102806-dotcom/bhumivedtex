@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: geoguard-dhanbad-ews
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: IMD_BASE_URL
+        value: https://api.imd.gov.in/api/v1
+      - key: IMD_AWS_STATION_ID
+        value: 15
