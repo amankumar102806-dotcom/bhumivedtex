@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoGuard AI — Dhanbad Mining Slope Failure Early Warning System</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet GIS CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <!-- FontAwesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="dark-theme">
+
+  <!-- TOP STATUS & COMMAND BAR -->
+  <header id="top-navbar">
+    <div class="nav-left">
+      <div class="brand-container">
+        <div class="brand-emblem">
+          <i class="fa-solid fa-mountain-sun"></i>
+        </div>
+        <div class="brand-text">
+          <div class="brand-name">
+            <span class="highlight">Dhanbad</span> MINE SLOPE & LANDSLIDE
+          </div>
+          <div class="brand-subtitle">
+            EARLY WARNING SYSTEM • DGMS & BCCL COALFIELDS
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick KPI Counters from Reference Image -->
+      <div class="top-kpis">
+        <div class="kpi-pill kpi-high" title="Sectors requiring evacuation / immediate action" onclick="filterSectors('HIGH')">
+          <span class="kpi-dot red-pulse"></span>
+          <span class="kpi-title">High Risk:</span>
+          <span class="kpi-val" id="top-kpi-high">2</span>
+        </div>
+        <div class="kpi-pill kpi-moderate" title="Sectors under active geotechnical watch" onclick="filterSectors('MODERATE')">
+          <span class="kpi-dot amber-pulse"></span>
+          <span class="kpi-title">Moderate:</span>
+          <span class="kpi-val" id="top-kpi-mod">2</span>
+        </div>
+        <div class="kpi-pill kpi-safe" title="Stable mining benches" onclick="filterSectors('SAFE')">
+          <span class="kpi-dot green-pulse"></span>
+          <span class="kpi-title">Safe:</span>
+          <span class="kpi-val" id="top-kpi-safe">4</span>
+        </div>
+        <div class="kpi-pill kpi-hospital" onclick="openHospitalModal()">
+          <i class="fa-solid fa-hospital-user"></i>
+          <span>Hospital Alertness:</span>
+          <strong class="text-amber">Amber Standby</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Navigation Action Buttons -->
+    <div class="nav-right">
+      <button class="nav-btn btn-dem" onclick="switchView('dem')">
+        <i class="fa-solid fa-cube"></i>
+        <span>3D DEM & Runout</span>
+      </button>
+
+      <button class="nav-btn btn-amb" onclick="openAmbulanceModal()">
+        <i class="fa-solid fa-truck-medical"></i>
+        <span>Hospitals & Ambulances</span>
+      </button>
+
+      <button class="nav-btn btn-cas" onclick="openCasualtyModal()">
+        <i class="fa-solid fa-bed-pulse"></i>
+        <span>Casualty Desk (<span id="top-cas-count">2</span>)</span>
+      </button>
+
+      <button class="nav-btn btn-fir" onclick="openFirModal()">
+        <i class="fa-solid fa-clipboard-user"></i>
+        <span>Missing FIRs (<span id="top-fir-count">1</span>)</span>
+      </button>
+
+      <button class="nav-btn btn-radar" onclick="toggleWeatherRadar()">
+        <i class="fa-solid fa-cloud-bolt"></i>
+        <span>Weather Radar</span>
+      </button>
+
+      <button class="nav-btn btn-push-warning" onclick="openPushWarningModal()">
+        <i class="fa-solid fa-tower-broadcast"></i>
+        <span>Push Warning</span>
+      </button>
+
+      <button class="nav-btn btn-sos" onclick="triggerImmediateSOS()" title="Immediate Mine SOS Alarm">
+        <i class="fa-solid fa-phone-volume"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- SECONDARY OPERATIONAL STRIP -->
+  <div id="sub-navbar">
+    <div class="search-filter-wrap">
+      <div class="search-box">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="sector-search-input" placeholder="Search Dhanbad sector (Jharia, Bastacolla, Kusunda...)" oninput="handleSectorSearch(this.value)" />
+      </div>
+      <div class="filter-pills">
+        <button class="fpill active" data-filter="ALL" onclick="filterSectors('ALL', this)">All (8)</button>
+        <button class="fpill fpill-high" data-filter="HIGH" onclick="filterSectors('HIGH', this)">High Risk</button>
+        <button class="fpill fpill-mod" data-filter="MODERATE" onclick="filterSectors('MODERATE', this)">Moderate</button>
+        <button class="fpill fpill-safe" data-filter="SAFE" onclick="filterSectors('SAFE', this)">Safe</button>
+      </div>
+    </div>
+
+    <!-- Live Telemetry Status Ticker -->
+    <div class="live-ticker">
+      <div class="ticker-item">
+        <span class="live-badge"><span class="pulse-dot"></span> LIVE WS</span>
+      </div>
+      <div class="ticker-item">
+        <i class="fa-solid fa-satellite"></i>
+        <span>Copernicus S-1 (Track 85/121)</span>
+      </div>
+      <div class="ticker-item">
+        <i class="fa-solid fa-cloud-rain text-cyan"></i>
+        <span id="ticker-rain">Dhanbad Rain: 62.4 mm/24h</span>
+      </div>
+      <div class="ticker-item">
+        <i class="fa-solid fa-temperature-half text-amber"></i>
+        <span id="ticker-temp">24.2°C • 78% RH</span>
+      </div>
+      <div class="ticker-item">
+        <i class="fa-solid fa-clock"></i>
+        <span id="clock-display">--:--:-- IST</span>
+      </div>
+      <button class="btn-audio-toggle" id="btn-audio-toggle" onclick="toggleAudioMute()" title="Mute/Unmute Siren Broadcast">
+        <i class="fa-solid fa-volume-high" id="audio-icon"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- MAIN APP CONTAINER -->
+  <div id="app-container">
+
+    <!-- LEFT SIDEBAR: SECTOR CARDS & SENSORS -->
+    <aside id="left-panel">
+      <div class="panel-section-header">
+        <div class="ps-title">
+          <i class="fa-solid fa-layer-group"></i>
+          <span>Monitored Sectors (<span id="sectors-count-label">8</span>)</span>
+        </div>
+        <button class="btn-icon" onclick="resetSectorView()" title="Fit all sectors"><i class="fa-solid fa-expand"></i></button>
+      </div>
+
+      <div id="sectors-scroll-list" class="custom-scroll">
+        <!-- Rendered by app.js -->
+      </div>
+
+      <!-- Quick Threshold Trigger / Safety Alert Summary -->
+      <div class="sidebar-threshold-box">
+        <div class="st-header">
+          <span><i class="fa-solid fa-sliders"></i> Alert Trigger Limits</span>
+          <button class="btn-text-link" onclick="openThresholdModal()">Tune</button>
+        </div>
+        <div class="st-items">
+          <div class="st-row">
+            <span>Rainfall Threshold:</span>
+            <strong class="text-amber">&gt; 65.0 mm/24h</strong>
+          </div>
+          <div class="st-row">
+            <span>Slope Displacement:</span>
+            <strong class="text-red">&gt; 12.0 mm/day</strong>
+          </div>
+          <div class="st-row">
+            <span>Critical FoS Limit:</span>
+            <strong class="text-red">&lt; 1.00 (Evac)</strong>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER WORKSPACE: TABS & VIEWS -->
+    <main id="center-workspace">
+      <!-- Workspace Navigation Tabs -->
+      <nav id="view-tabs">
+        <button class="vtab active" data-tab="map" onclick="switchView('map')">
+          <i class="fa-solid fa-map-location-dot"></i>
+          <span>GIS Map & Micro-Sector</span>
+        </button>
+
+        <button class="vtab" data-tab="dem" onclick="switchView('dem')">
+          <i class="fa-solid fa-mountain"></i>
+          <span>3D DEM & Failure Sim</span>
+        </button>
+
+        <button class="vtab" data-tab="insar" onclick="switchView('insar')">
+          <i class="fa-solid fa-satellite-dish"></i>
+          <span>Copernicus InSAR & ISRO NRSC</span>
+        </button>
+
+        <button class="vtab" data-tab="engineer" onclick="switchView('engineer')">
+          <i class="fa-solid fa-compass-drafting"></i>
+          <span>Mining Engineer Hub</span>
+        </button>
+
+        <button class="vtab" data-tab="photos" onclick="switchView('photos')">
+          <i class="fa-solid fa-camera-retro"></i>
+          <span>Prone Areas Surveillance</span>
+        </button>
+
+        <button class="vtab" data-tab="imd" onclick="switchView('imd')">
+          <i class="fa-solid fa-cloud-showers-heavy"></i>
+          <span>IMD Weather & Nowcast</span>
+        </button>
+
+        <button class="vtab" data-tab="emergency" onclick="switchView('emergency')">
+          <i class="fa-solid fa-truck-medical"></i>
+          <span>Emergency Ops & Casualties</span>
+        </button>
+
+        <button class="vtab" data-tab="charts" onclick="switchView('charts')">
+          <i class="fa-solid fa-chart-line"></i>
+          <span>Telemetry Analytics</span>
+        </button>
+      </nav>
+
+      <!-- VIEW 1: GIS MAP -->
+      <section id="view-map" class="view-content active">
+        <div id="map-canvas"></div>
+
+        <!-- Basemap Selector Overlay (Free & Flawless!) -->
+        <div class="map-layer-controls">
+          <button class="map-layer-btn active" data-layer="esri" onclick="changeBasemap('esri', this)">
+            <i class="fa-solid fa-earth-americas"></i> Satellite (Esri High-Res)
+          </button>
+          <button class="map-layer-btn" data-layer="osm" onclick="changeBasemap('osm', this)">
+            <i class="fa-solid fa-map"></i> Topo Street (OSM)
+          </button>
+          <button class="map-layer-btn" data-layer="dark" onclick="changeBasemap('dark', this)">
+            <i class="fa-solid fa-circle-half-stroke"></i> Dark Matter (Carto)
+          </button>
+          <button class="map-layer-btn" id="btn-toggle-insar-overlay" onclick="toggleInSARLayer(this)">
+            <i class="fa-solid fa-radiation"></i> InSAR Deformation Heatmap
+          </button>
+          <button class="map-layer-btn" id="btn-toggle-radar-overlay" onclick="toggleRadarSimulation(this)">
+            <i class="fa-solid fa-cloud-rain"></i> Doppler Rain Radar
+          </button>
+        </div>
+
+        <!-- Map Hazard Legend -->
+        <div id="dhanbad-hazard-legend">
+          <div class="legend-header">DHANBAD SLOPE HAZARD INDEX</div>
+          <div class="legend-row">
+            <span class="legend-marker red"></span>
+            <div>
+              <strong>High Risk:</strong> Evacuation Imminent (FoS &lt; 1.0)
+            </div>
+          </div>
+          <div class="legend-row">
+            <span class="legend-marker amber"></span>
+            <div>
+              <strong>Moderate:</strong> Active Watch Alert (FoS 1.0 – 1.3)
+            </div>
+          </div>
+          <div class="legend-row">
+            <span class="legend-marker green"></span>
+            <div>
+              <strong>Safe:</strong> Stable Bench (FoS &gt; 1.3)
+            </div>
+          </div>
+        </div>
+
+        <!-- Micro-Sector High Resolution Floating Card (From Reference Image) -->
+        <div id="micro-sector-card" class="glass-overlay-card">
+          <div class="msc-header">
+            <div class="msc-title-group">
+              <span class="micro-tag"><i class="fa-solid fa-crosshairs"></i> HIGH-RESOLUTION MICRO-SECTOR MAP</span>
+              <h4 id="msc-sector-name">Jharia Overburden Dump Sector-4</h4>
+              <div class="msc-meta">
+                <span id="msc-location"><i class="fa-solid fa-location-dot"></i> Jharia Coalfield, Dhanbad</span>
+                <span>•</span>
+                <span id="msc-lora"><i class="fa-solid fa-tower-cell"></i> LoRa: NODE-DHN-JHR01</span>
+              </div>
+            </div>
+            <button class="msc-close" onclick="closeMicroSectorCard()"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+
+          <div class="msc-status-bar">
+            <span class="msc-status-badge high" id="msc-risk-badge">HIGH RISK: EVACUATION</span>
+            <span class="msc-update-time" id="msc-update-time">Updated 2s ago</span>
+          </div>
+
+          <!-- Micro Map Inset with Sensor Legend -->
+          <div class="msc-map-inset-wrapper">
+            <div id="micro-map-canvas"></div>
+            <div class="msc-coords-badge" id="msc-coords-badge">
+              <i class="fa-solid fa-location-crosshairs"></i> Lat: 23.7441° N | Lng: 86.4156° E | 245m RL
+            </div>
+          </div>
+
+          <div class="micro-sensors-legend">
+            <span><i class="fa-solid fa-circle-dot text-cyan"></i> Inclinometer (35m)</span>
+            <span><i class="fa-solid fa-droplet text-blue"></i> Moisture Sensor</span>
+            <span><i class="fa-solid fa-cloud-rain text-indigo"></i> Rain Gauge</span>
+            <span><i class="fa-solid fa-tower-broadcast text-purple"></i> LoRa Gateway</span>
+            <span><i class="fa-solid fa-draw-polygon text-red"></i> Danger Perimeter</span>
+            <span><i class="fa-solid fa-route text-emerald"></i> Evacuation Path</span>
+            <span><i class="fa-solid fa-person-shelter text-teal"></i> Safe Shelter</span>
+          </div>
+
+          <!-- Real-Time Sensor Telemetry Bars -->
+          <div class="micro-telemetry-box">
+            <div class="mt-title"><i class="fa-solid fa-gauge-high"></i> REAL-TIME SENSOR TELEMETRY</div>
+            <div class="mt-grid">
+              <div class="mt-card">
+                <div class="mt-label">SOIL MOISTURE <i class="fa-solid fa-droplet text-blue"></i></div>
+                <div class="mt-value"><span id="msc-soil-val">88.2</span> <small>% VWC</small></div>
+                <div class="progress-bar-wrap">
+                  <div class="pbar-fill pbar-red" id="msc-soil-bar" style="width: 88%;"></div>
+                </div>
+                <div class="mt-sub">Saturation: <strong class="text-red">Critical &gt;85%</strong></div>
+              </div>
+
+              <div class="mt-card">
+                <div class="mt-label">PRECIPITATION RATE <i class="fa-solid fa-cloud-rain text-cyan"></i></div>
+                <div class="mt-value"><span id="msc-rain-val">52.4</span> <small>mm/h</small></div>
+                <div class="progress-bar-wrap">
+                  <div class="pbar-fill pbar-red" id="msc-rain-bar" style="width: 78%;"></div>
+                </div>
+                <div class="mt-sub">24h Accum: <strong id="msc-rain-24h">215.0 mm</strong> (Critical)</div>
+              </div>
+
+              <div class="mt-card">
+                <div class="mt-label">FACTOR OF SAFETY <i class="fa-solid fa-shield-halved text-amber"></i></div>
+                <div class="mt-value"><span id="msc-fos-val">0.92</span> <small>FoS</small></div>
+                <div class="progress-bar-wrap">
+                  <div class="pbar-fill pbar-red" id="msc-fos-bar" style="width: 46%;"></div>
+                </div>
+                <div class="mt-sub">Status: <strong class="text-red">Limit State Breach</strong></div>
+              </div>
+
+              <div class="mt-card">
+                <div class="mt-label">DISPLACEMENT RATE <i class="fa-solid fa-arrows-up-down text-purple"></i></div>
+                <div class="mt-value"><span id="msc-disp-val">22.4</span> <small>mm/day</small></div>
+                <div class="progress-bar-wrap">
+                  <div class="pbar-fill pbar-red" id="msc-disp-bar" style="width: 90%;"></div>
+                </div>
+                <div class="mt-sub">InSAR LOS: <strong class="text-red">-28.4 mm/yr</strong></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Micro Card Action Bar -->
+          <div class="msc-actions-bar">
+            <button class="btn btn-danger-solid btn-full" onclick="triggerSectorEvacuationAlert()">
+              <i class="fa-solid fa-paper-plane"></i> Push Warning Message to Sector & Evacuate
+            </button>
+            <div class="msc-btn-pair">
+              <button class="btn btn-outline" onclick="openHelplineModal()">
+                <i class="fa-solid fa-phone"></i> Dhanbad Helplines
+              </button>
+              <button class="btn btn-outline" onclick="exportSITREP('json')">
+                <i class="fa-solid fa-file-arrow-down"></i> Export SITREP
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 2: 3D DEM MODEL -->
+      <section id="view-dem" class="view-content">
+        <div class="view-sub-header">
+          <div class="vsh-info">
+            <h3><i class="fa-solid fa-mountain"></i> 3D Digital Elevation Model (DEM) & Slope Failure Simulation</h3>
+            <p>Interactive WebGL 3D representation of Dhanbad opencast mine benches, geological shear surfaces, and rockfall debris runout zones.</p>
+          </div>
+          <div class="dem-action-buttons">
+            <button class="btn btn-sm btn-outline" onclick="demAction('toggle-wireframe')"><i class="fa-solid fa-border-all"></i> Wireframe</button>
+            <button class="btn btn-sm btn-outline" onclick="demAction('toggle-heatmap')"><i class="fa-solid fa-palette"></i> Risk Contours</button>
+            <button class="btn btn-sm btn-outline" onclick="demAction('reset-camera')"><i class="fa-solid fa-arrows-to-dot"></i> Reset Camera</button>
+            <button class="btn btn-sm btn-danger" onclick="demAction('simulate-failure')"><i class="fa-solid fa-burst"></i> Simulate Slope Failure</button>
+          </div>
+        </div>
+
+        <div id="dem-viewport-container">
+          <div id="dem-three-canvas"></div>
+
+          <!-- DEM Real-time HUD -->
+          <div class="dem-hud-overlay">
+            <div class="dem-hud-card">
+              <div class="hud-title"><i class="fa-solid fa-cube"></i> GEOMETRIC PARAMETERS</div>
+              <div class="hud-item"><span>Bench Height (H):</span> <strong>30 m (Stepped)</strong></div>
+              <div class="hud-item"><span>Bench Slope Angle (β):</span> <strong class="text-red">42.5° (Critical)</strong></div>
+              <div class="hud-item"><span>Overall Slope Angle:</span> <strong>34.0°</strong></div>
+              <div class="hud-item"><span>Slip Mechanism:</span> <strong>Bishop Circular / Planar Shear</strong></div>
+              <div class="hud-item"><span>Runout Impact Zone:</span> <strong class="text-amber">120 m Envelope</strong></div>
+            </div>
+
+            <div class="dem-hud-card">
+              <div class="hud-title"><i class="fa-solid fa-info-circle"></i> NAVIGATION CONTROLS</div>
+              <div class="hud-text">• <strong>Left Click + Drag:</strong> Orbit & Rotate View</div>
+              <div class="hud-text">• <strong>Right Click + Drag:</strong> Pan Mine Model</div>
+              <div class="hud-text">• <strong>Scroll Wheel:</strong> Zoom In / Out</div>
+              <div class="hud-text">• <strong>Click "Simulate Failure":</strong> Trigger dynamic shear collapse</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 3: COPERNICUS SENTINEL-1 InSAR & ISRO NRSC -->
+      <section id="view-insar" class="view-content">
+        <div class="view-sub-header">
+          <div class="vsh-info">
+            <h3><i class="fa-solid fa-satellite-dish"></i> Copernicus Sentinel-1 InSAR & ISRO NRSC Landslide Atlas</h3>
+            <p>Interferometric Synthetic Aperture Radar (InSAR) Line-of-Sight (LOS) velocity tracking and ISRO NRSC landslide susceptibility integration for Dhanbad.</p>
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="refreshInSARData()"><i class="fa-solid fa-rotate"></i> Sync Sentinel-1 Pass</button>
+        </div>
+
+        <div class="insar-dashboard-grid">
+          <div class="insar-main-card">
+            <div class="imc-header">
+              <div class="imc-title">
+                <i class="fa-solid fa-chart-area"></i> Multi-Temporal Sentinel-1 Cumulative Displacement Time-Series
+              </div>
+              <select id="insar-sector-select" onchange="loadInSARTimeseries(this.value)">
+                <option value="JHR-S4">Jharia Overburden Dump Sector-4</option>
+                <option value="LDN-D3">Lodna Deep Pit Fire Zone</option>
+                <option value="KSN-M2">Kusunda Mine East Bench</option>
+                <option value="BST-P2">Bastacolla Opencast Pit-2</option>
+                <option value="KTR-C1">Katras Colliery North Slope</option>
+                <option value="BHW-C3">Bhowra Colliery West Face</option>
+                <option value="SDM-M5">Sudamdih Shaft Buffer Slope</option>
+                <option value="MND-S6">Moonidih Deep Open Face</option>
+              </select>
+            </div>
+            <div class="chart-box">
+              <canvas id="chart-insar-timeseries"></canvas>
+            </div>
+          </div>
+
+          <div class="insar-side-cards">
+            <div class="stat-box">
+              <div class="sb-title">SATELLITE ORBIT DETAILS</div>
+              <div class="sb-row"><span>Platform:</span> <strong>Sentinel-1A (C-SAR)</strong></div>
+              <div class="sb-row"><span>Wavelength:</span> <strong>5.546 cm (C-band)</strong></div>
+              <div class="sb-row"><span>Orbit Geometry:</span> <strong>Descending Track 85</strong></div>
+              <div class="sb-row"><span>Incidence Angle:</span> <strong>38.6°</strong></div>
+              <div class="sb-row"><span>Repeat Cycle:</span> <strong>12 Days</strong></div>
+              <div class="sb-row"><span>Geodetic Reference:</span> <strong>IIT-ISM Dhanbad GNSS</strong></div>
+            </div>
+
+            <div class="stat-box">
+              <div class="sb-title">ISRO NRSC LANDSLIDE ATLAS (JHARKHAND)</div>
+              <div class="sb-row"><span>Atlas Map Sheet:</span> <strong>NRSC-LS-JH-DHN-041</strong></div>
+              <div class="sb-row"><span>Susceptibility:</span> <strong class="badge-tag red">VERY HIGH (0.88)</strong></div>
+              <div class="sb-row"><span>Lithology:</span> <strong>Barakar Sandstone & Shales</strong></div>
+              <div class="sb-row"><span>Historical Slides:</span> <strong>118 Mining Events Mapped</strong></div>
+              <div class="sb-row"><span>ML Model Validation:</span> <strong>AUC-ROC 0.914</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- InSAR Velocity Table for all Dhanbad Sectors -->
+        <div class="table-container-card">
+          <div class="tcc-header">
+            <i class="fa-solid fa-table-list"></i> Dhanbad Mining Sectors — Copernicus InSAR Deformation Summary
+          </div>
+          <div class="table-responsive">
+            <table class="mining-table" id="insar-summary-table">
+              <thead>
+                <tr>
+                  <th>Sector ID</th>
+                  <th>Sector Name</th>
+                  <th>LOS Velocity (mm/yr)</th>
+                  <th>12-Day Disp (mm)</th>
+                  <th>Coherence (γ)</th>
+                  <th>ISRO Atlas Zone</th>
+                  <th>Creep Status</th>
+                  <th>Risk Action</th>
+                </tr>
+              </thead>
+              <tbody id="insar-table-body">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 4: MINING ENGINEER HUB -->
+      <section id="view-engineer" class="view-content">
+        <div class="view-sub-header">
+          <div class="vsh-info">
+            <h3><i class="fa-solid fa-compass-drafting"></i> Mining Engineer Geotechnical Hub & Telemetry Inputs</h3>
+            <p>Comprehensive telemetry inspection for geotechnical engineers: Inclinometer depth profiles, vibrating wire piezometers, crackmeters, and Bishop limit equilibrium calculator.</p>
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="openInspectionModal()"><i class="fa-solid fa-clipboard-check"></i> Log Field Inspection</button>
+        </div>
+
+        <div class="engineer-grid">
+          <!-- Inclinometer Depth Chart -->
+          <div class="eng-card">
+            <div class="eng-card-header">
+              <span><i class="fa-solid fa-arrows-left-right"></i> Borehole Inclinometer Depth vs Deflection Profile</span>
+              <small class="text-muted">Sensor: INCL-DHN-04 (0m to -35m)</small>
+            </div>
+            <div class="chart-box-sm">
+              <canvas id="chart-inclinometer"></canvas>
+            </div>
+            <div class="eng-card-footer">
+              <span class="text-amber"><i class="fa-solid fa-triangle-exclamation"></i> Shear displacement plane identified at <strong>-15.0m depth</strong>.</span>
+            </div>
+          </div>
+
+          <!-- Bishop Limit Equilibrium Interactive Calculator -->
+          <div class="eng-card">
+            <div class="eng-card-header">
+              <span><i class="fa-solid fa-calculator"></i> Bishop Simplified Factor of Safety Calculator</span>
+              <button class="btn-text-link" onclick="runBishopCalculation()">Compute FoS</button>
+            </div>
+            <div class="calc-form">
+              <div class="calc-row">
+                <label>Cohesion c' (kPa):</label>
+                <input type="number" id="calc-c" value="28.5" step="0.5" />
+              </div>
+              <div class="calc-row">
+                <label>Friction Angle φ' (°):</label>
+                <input type="number" id="calc-phi" value="34.0" step="0.5" />
+              </div>
+              <div class="calc-row">
+                <label>Bench Height H (m):</label>
+                <input type="number" id="calc-h" value="30.0" step="1" />
+              </div>
+              <div class="calc-row">
+                <label>Slope Angle β (°):</label>
+                <input type="number" id="calc-beta" value="42.0" step="0.5" />
+              </div>
+              <div class="calc-row">
+                <label>Pore Pressure Ratio (ru):</label>
+                <input type="number" id="calc-ru" value="0.28" step="0.02" />
+              </div>
+              <div class="calc-result-box" id="calc-result-box">
+                <div class="cr-label">Calculated Factor of Safety:</div>
+                <div class="cr-value text-red" id="calc-output-fos">0.942</div>
+                <div class="cr-status text-red" id="calc-output-status">UNSTABLE (SLOPE FAILURE IMMINENT)</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Piezometer & Groundwater Array -->
+          <div class="eng-card">
+            <div class="eng-card-header">
+              <span><i class="fa-solid fa-water"></i> Vibrating Wire Piezometers & Water Table</span>
+            </div>
+            <div class="sensor-list">
+              <div class="sensor-row">
+                <div>
+                  <strong>PZ-01-CREST</strong>
+                  <small>Depth 25m • Crest Bench</small>
+                </div>
+                <div class="text-right">
+                  <span class="metric-val text-amber">114.5 kPa</span>
+                  <small>Head: 11.67m</small>
+                </div>
+              </div>
+              <div class="sensor-row">
+                <div>
+                  <strong>PZ-02-MIDSLOPE</strong>
+                  <small>Depth 35m • Mid-face</small>
+                </div>
+                <div class="text-right">
+                  <span class="metric-val text-emerald">98.2 kPa</span>
+                  <small>Head: 10.01m</small>
+                </div>
+              </div>
+              <div class="sensor-row">
+                <div>
+                  <strong>PZ-03-TOE</strong>
+                  <small>Depth 15m • Dump Toe Sump</small>
+                </div>
+                <div class="text-right">
+                  <span class="metric-val text-red">142.8 kPa</span>
+                  <small>Confined Head Critical</small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Extensometers & Crackmeters -->
+          <div class="eng-card">
+            <div class="eng-card-header">
+              <span><i class="fa-solid fa-ruler-combined"></i> Crackmeters & Fissure Widths</span>
+            </div>
+            <div class="sensor-list">
+              <div class="sensor-row">
+                <div>
+                  <strong>CM-DHN-01 (Crest Fissure 1)</strong>
+                  <small>Active Tensile Crack #1</small>
+                </div>
+                <div class="text-right">
+                  <span class="metric-val text-red">38.4 mm (+4.8 mm/d)</span>
+                  <small class="badge-tag red">ACCELERATING</small>
+                </div>
+              </div>
+              <div class="sensor-row">
+                <div>
+                  <strong>CM-DHN-02 (Mid-bench Joint)</strong>
+                  <small>Barakar Sandstone Cleat</small>
+                </div>
+                <div class="text-right">
+                  <span class="metric-val text-amber">14.2 mm (+1.1 mm/d)</span>
+                  <small class="badge-tag amber">STEADY CREEP</small>
+                </div>
+              </div>
+              <div class="sensor-row">
+                <div>
+                  <strong>CM-DHN-03 (Haul Road Ramp)</strong>
+                  <small>Vehicle Access Berm</small>
+                </div>
+                <div class="text-right">
+                  <span class="metric-val text-emerald">8.6 mm (+0.4 mm/d)</span>
+                  <small class="badge-tag green">STABLE</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Field Inspections Log Table -->
+        <div class="table-container-card">
+          <div class="tcc-header">
+            <i class="fa-solid fa-clipboard-list"></i> Field Geotechnical Observations Log (BCCL Mining Engineers)
+          </div>
+          <div class="table-responsive">
+            <table class="mining-table">
+              <thead>
+                <tr>
+                  <th>Log ID</th>
+                  <th>Sector</th>
+                  <th>Engineer / Geologist</th>
+                  <th>Bench RL</th>
+                  <th>Tension Crack</th>
+                  <th>Water Seepage</th>
+                  <th>Face Bulging</th>
+                  <th>Mandated Action</th>
+                </tr>
+              </thead>
+              <tbody id="engineer-inspections-tbody">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 5: PRONE AREAS SURVEILLANCE PHOTOS -->
+      <section id="view-photos" class="view-content">
+        <div class="view-sub-header">
+          <div class="vsh-info">
+            <h3><i class="fa-solid fa-camera-retro"></i> Slope Failure Prone Areas — Dhanbad Photographic Surveillance</h3>
+            <p>High-resolution drone orthomosaics, AI tension crack detection bounding boxes, and radiometric thermal imagery of critical slope zones in Jharia coalfield.</p>
+          </div>
+          <div class="photo-controls">
+            <button class="btn btn-sm btn-outline active" id="btn-view-optical" onclick="setPhotoViewMode('optical')"><i class="fa-solid fa-image"></i> Optical RGB</button>
+            <button class="btn btn-sm btn-outline" id="btn-view-thermal" onclick="setPhotoViewMode('thermal')"><i class="fa-solid fa-fire-flame-curved"></i> Thermal IR (Coal Fires)</button>
+          </div>
+        </div>
+
+        <div class="photos-masonry-grid" id="photos-container">
+          <!-- Populated by JavaScript -->
+        </div>
+      </section>
+
+      <!-- VIEW 6: IMD WEATHER & NOWCAST -->
+      <section id="view-imd" class="view-content">
+        <div class="view-sub-header">
+          <div class="vsh-info">
+            <h3><i class="fa-solid fa-cloud-showers-heavy"></i> India Meteorological Department (IMD) Gateway</h3>
+            <p>Direct integration with official IMD endpoints: AWS station 15, district rainfall records, weather warnings, and 3-hour nowcast.</p>
+          </div>
+          <div class="imd-top-actions">
+            <button class="btn btn-sm btn-outline" onclick="openIMDKeyModal()"><i class="fa-solid fa-key"></i> Set IMD API Key</button>
+            <button class="btn btn-sm btn-primary" onclick="refreshIMDData()"><i class="fa-solid fa-rotate"></i> Query IMD Endpoints</button>
+          </div>
+        </div>
+
+        <div class="imd-cards-grid">
+          <!-- AWS Station Observation -->
+          <div class="imd-card">
+            <div class="ic-header">
+              <span><i class="fa-solid fa-tower-observation"></i> AWS Station Observations</span>
+              <span class="badge-tag blue" id="imd-aws-source">AWS Dhanbad (sid=15)</span>
+            </div>
+            <div class="ic-content" id="imd-aws-content">
+              <div class="ic-row"><span>Station Name:</span> <strong>DHANBAD AWS (BCCL Central Grid)</strong></div>
+              <div class="ic-row"><span>Rainfall (Current / 1h):</span> <strong class="text-cyan" id="imd-aws-rain-1h">4.5 mm</strong></div>
+              <div class="ic-row"><span>Rainfall (Cumulative 24h):</span> <strong class="text-red" id="imd-aws-rain-24h">62.4 mm</strong></div>
+              <div class="ic-row"><span>Air Temperature:</span> <strong id="imd-aws-temp">24.2 °C</strong></div>
+              <div class="ic-row"><span>Relative Humidity:</span> <strong id="imd-aws-humidity">78 %</strong></div>
+              <div class="ic-row"><span>Wind Speed & Direction:</span> <strong id="imd-aws-wind">14.5 km/h (ESE)</strong></div>
+              <div class="ic-row"><span>Atmospheric Pressure:</span> <strong id="imd-aws-pressure">1008.2 hPa</strong></div>
+            </div>
+          </div>
+
+          <!-- District Rainfall Records -->
+          <div class="imd-card">
+            <div class="ic-header">
+              <span><i class="fa-solid fa-chart-column"></i> District Rainfall Records</span>
+              <span class="badge-tag green" id="imd-rainfall-source">Dhanbad District</span>
+            </div>
+            <div class="ic-content" id="imd-rainfall-content">
+              <div class="ic-row"><span>Daily Actual Rainfall:</span> <strong class="text-cyan" id="imd-rf-today">54.8 mm</strong></div>
+              <div class="ic-row"><span>Daily Normal Rainfall:</span> <strong>12.5 mm</strong></div>
+              <div class="ic-row"><span>Weekly Rainfall (Actual):</span> <strong id="imd-rf-weekly">168.4 mm</strong></div>
+              <div class="ic-row"><span>Seasonal Cumulative:</span> <strong id="imd-rf-cum">682.0 mm</strong></div>
+              <div class="ic-row"><span>Departure from Normal:</span> <strong class="text-amber" id="imd-rf-dep">+31.2% (EXCESS)</strong></div>
+              <div class="ic-row"><span>Soil Saturation Alert:</span> <strong class="text-red">ACTIVE (High Infiltration)</strong></div>
+            </div>
+          </div>
+
+          <!-- District Weather Warnings (Multi-Day) -->
+          <div class="imd-card">
+            <div class="ic-header">
+              <span><i class="fa-solid fa-triangle-exclamation"></i> District Weather Warnings</span>
+              <span class="badge-tag amber" id="imd-warning-source">Multi-Day Forecast</span>
+            </div>
+            <div class="ic-content" id="imd-warning-content">
+              <div class="warning-day-item orange">
+                <strong>Day 1 (Today): ORANGE WARNING</strong>
+                <p>Heavy to very heavy rain with gusty winds (40-50 kmph). Suspend dump crest traffic.</p>
+              </div>
+              <div class="warning-day-item yellow">
+                <strong>Day 2: YELLOW WARNING</strong>
+                <p>Thunderstorms accompanied with lightning and moderate rain. Continuous crack monitoring.</p>
+              </div>
+              <div class="warning-day-item yellow">
+                <strong>Day 3: YELLOW WARNING</strong>
+                <p>Isolated thundershowers. Inspect bench sump pumps.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- District Nowcast (Short-Term 3h) -->
+          <div class="imd-card">
+            <div class="ic-header">
+              <span><i class="fa-solid fa-bolt"></i> 3-Hour District Nowcast</span>
+              <span class="badge-tag red">SEVERE NOWCAST</span>
+            </div>
+            <div class="ic-content" id="imd-nowcast-content">
+              <div class="nowcast-box">
+                <div class="nc-alert-header">
+                  <i class="fa-solid fa-cloud-bolt text-red"></i>
+                  <span>CONVECTIVE THUNDERSTORM ACTIVE</span>
+                </div>
+                <p id="imd-nc-text">Light to moderate spells of rain accompanied with cloud-to-ground lightning likely over Jharia, Katras, and Dhanbad mining belts.</p>
+                <div class="nc-meta">
+                  <span>Valid for: <strong>Next 3 Hours</strong></span>
+                  <span>Radar Echo: <strong>46.5 dBZ</strong></span>
+                </div>
+                <div class="nc-advisory">
+                  <strong>DGMS Advisory:</strong> Immediately halt all highwall blasting and retreat HEMM machinery from dump toe zones.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 7: EMERGENCY OPS & CASUALTIES -->
+      <section id="view-emergency" class="view-content">
+        <div class="view-sub-header">
+          <div class="vsh-info">
+            <h3><i class="fa-solid fa-truck-medical"></i> Emergency Response & Casualty Command Desk</h3>
+            <p>Immediate ambulance fleet dispatch, casualty triage registry, missing personnel FIRs, and PA speaker transmission controls.</p>
+          </div>
+          <div class="sub-actions">
+            <button class="btn btn-sm btn-danger" onclick="openSpeakerAlert()"><i class="fa-solid fa-bullhorn"></i> Transmit PA Alert</button>
+            <button class="btn btn-sm btn-primary" onclick="openAmbulanceModal()"><i class="fa-solid fa-ambulance"></i> Dispatch Ambulance</button>
+          </div>
+        </div>
+
+        <div class="emergency-dashboard-grid">
+          <!-- Ambulance Fleet -->
+          <div class="emer-card">
+            <div class="ec-header">
+              <span><i class="fa-solid fa-truck-medical"></i> Dhanbad Ambulance Fleet</span>
+              <span class="badge-tag green">4 Units Monitored</span>
+            </div>
+            <div class="ambulance-list" id="ambulance-list-container">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+
+          <!-- Casualty Triage Desk -->
+          <div class="emer-card">
+            <div class="ec-header">
+              <span><i class="fa-solid fa-bed-pulse"></i> Casualty Triage Desk</span>
+              <button class="btn-text-link" onclick="openReportCasualtyModal()">+ Report Casualty</button>
+            </div>
+            <div class="casualty-list" id="casualty-list-container">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+
+          <!-- Missing Persons / FIRs -->
+          <div class="emer-card">
+            <div class="ec-header">
+              <span><i class="fa-solid fa-clipboard-user"></i> Missing Persons / Police FIRs</span>
+              <button class="btn-text-link" onclick="openReportFirModal()">+ File FIR</button>
+            </div>
+            <div class="fir-list" id="fir-list-container">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+
+          <!-- Emergency Helplines & SOS Contacts -->
+          <div class="emer-card">
+            <div class="ec-header">
+              <span><i class="fa-solid fa-phone"></i> Emergency Direct Hotlines</span>
+            </div>
+            <div class="hotline-list">
+              <div class="hl-item">
+                <i class="fa-solid fa-hospital text-red"></i>
+                <div>
+                  <strong>BCCL Central Hospital Emergency</strong>
+                  <span>0326-2310400 • Koyla Nagar</span>
+                </div>
+                <a href="tel:03262310400" class="btn-call">Call</a>
+              </div>
+              <div class="hl-item">
+                <i class="fa-solid fa-shield-halved text-amber"></i>
+                <div>
+                  <strong>DGMS Dhanbad Mine Rescue Station</strong>
+                  <span>0326-2201091 • Zonal HQ</span>
+                </div>
+                <a href="tel:03262201091" class="btn-call">Call</a>
+              </div>
+              <div class="hl-item">
+                <i class="fa-solid fa-truck-medical text-cyan"></i>
+                <div>
+                  <strong>State Emergency Ambulance</strong>
+                  <span>108 (Toll Free)</span>
+                </div>
+                <a href="tel:108" class="btn-call">Call</a>
+              </div>
+              <div class="hl-item">
+                <i class="fa-solid fa-person-military-rifle text-purple"></i>
+                <div>
+                  <strong>NDRF 9th Battalion Patrol</strong>
+                  <span>0612-2545412</span>
+                </div>
+                <a href="tel:06122545412" class="btn-call">Call</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 8: TELEMETRY ANALYTICS & CHARTS -->
+      <section id="view-charts" class="view-content">
+        <div class="view-sub-header">
+          <div class="vsh-info">
+            <h3><i class="fa-solid fa-chart-line"></i> Real-Time Multi-Sensor Telemetry Analytics</h3>
+            <p>Live synchronized charts tracking Factor of Safety, rainfall intensity, pore water pressure, and soil saturation.</p>
+          </div>
+          <button class="btn btn-sm btn-outline" onclick="exportSITREP('json')"><i class="fa-solid fa-download"></i> Export Analytics</button>
+        </div>
+
+        <div class="charts-dashboard-grid">
+          <div class="chart-card">
+            <div class="cc-header">
+              <span><i class="fa-solid fa-shield-halved"></i> Factor of Safety Trends (All Sectors)</span>
+              <span class="threshold-tag red">Limit FoS = 1.0</span>
+            </div>
+            <div class="cc-body">
+              <canvas id="chart-fos-trends"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="cc-header">
+              <span><i class="fa-solid fa-cloud-rain"></i> Rainfall Intensity vs Critical Trigger</span>
+              <span class="threshold-tag amber">Threshold 65 mm</span>
+            </div>
+            <div class="cc-body">
+              <canvas id="chart-rain-trends"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="cc-header">
+              <span><i class="fa-solid fa-droplet"></i> Volumetric Soil Moisture (% VWC)</span>
+              <span class="threshold-tag red">Saturation 85%</span>
+            </div>
+            <div class="cc-body">
+              <canvas id="chart-moist-trends"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="cc-header">
+              <span><i class="fa-solid fa-water"></i> Pore Water Pressure (kPa)</span>
+              <span class="threshold-tag red">Limit 110 kPa</span>
+            </div>
+            <div class="cc-body">
+              <canvas id="chart-pore-trends"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- RIGHT PANEL: SECTOR TELEMETRY DEEP-DIVE & QUICK ACTIONS -->
+    <aside id="right-panel">
+      <div class="panel-section-header">
+        <div class="ps-title">
+          <i class="fa-solid fa-chart-pie"></i>
+          <span>Sector Operations</span>
+        </div>
+        <span class="badge-tag red" id="rp-risk-tag">HIGH RISK</span>
+      </div>
+
+      <div class="selected-sector-banner">
+        <h3 id="rp-sector-name">Jharia Overburden Dump Sector-4</h3>
+        <p id="rp-coalfield">Jharia Coalfield (BCCL Area IX) • LoRa: NODE-DHN-JHR01</p>
+      </div>
+
+      <!-- Key Gauge Ring -->
+      <div class="gauge-ring-container">
+        <div class="gauge-box">
+          <div class="gauge-val text-red" id="rp-fos-val">0.92</div>
+          <div class="gauge-label">FACTOR OF SAFETY</div>
+          <small class="text-red">Failure Imminent (&lt; 1.0)</small>
+        </div>
+      </div>
+
+      <!-- Key Sensor Rows -->
+      <div class="rp-metrics-list">
+        <div class="rp-metric-row">
+          <span><i class="fa-solid fa-cloud-rain text-cyan"></i> Rainfall 24h:</span>
+          <strong id="rp-rain-val">78.5 mm</strong>
+        </div>
+        <div class="rp-metric-row">
+          <span><i class="fa-solid fa-arrows-up-down text-purple"></i> Cumulative Displacement:</span>
+          <strong id="rp-disp-val">22.4 mm</strong>
+        </div>
+        <div class="rp-metric-row">
+          <span><i class="fa-solid fa-droplet text-blue"></i> Soil Moisture:</span>
+          <strong id="rp-moist-val">88.2 % VWC</strong>
+        </div>
+        <div class="rp-metric-row">
+          <span><i class="fa-solid fa-water text-indigo"></i> Pore Water Pressure:</span>
+          <strong id="rp-pore-val">122.4 kPa</strong>
+        </div>
+        <div class="rp-metric-row">
+          <span><i class="fa-solid fa-satellite text-emerald"></i> InSAR LOS Rate:</span>
+          <strong id="rp-insar-val">-28.4 mm/yr</strong>
+        </div>
+        <div class="rp-metric-row">
+          <span><i class="fa-solid fa-mountain text-amber"></i> Slope Angle:</span>
+          <strong id="rp-slope-val">42.0°</strong>
+        </div>
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div class="rp-actions-container">
+        <button class="btn btn-danger-solid btn-full" onclick="triggerEvacuationSequence()">
+          <i class="fa-solid fa-triangle-exclamation"></i> TRIGGER IMMEDIATE EVACUATION
+        </button>
+
+        <button class="btn btn-warning-solid btn-full" onclick="openSpeakerAlert()">
+          <i class="fa-solid fa-bullhorn"></i> TRANSMIT PA SPEAKER WARNING
+        </button>
+
+        <button class="btn btn-primary-solid btn-full" onclick="openAmbulanceModal()">
+          <i class="fa-solid fa-truck-medical"></i> DISPATCH AMBULANCE
+        </button>
+
+        <button class="btn btn-outline btn-full" onclick="triggerSimulatedDrill()">
+          <i class="fa-solid fa-vial"></i> Test Threshold Breach Simulation
+        </button>
+      </div>
+
+      <!-- Recent Management Warning Dispatches -->
+      <div class="management-alerts-box">
+        <div class="mab-header">
+          <span><i class="fa-solid fa-bell"></i> Management Alerts Sent</span>
+          <span class="badge-count" id="mab-count">3</span>
+        </div>
+        <div class="mab-list" id="management-alerts-list">
+          <div class="mab-item">
+            <div class="mab-time">2 mins ago</div>
+            <div class="mab-text">SMS/WhatsApp sent to BCCL GM Safety: FoS breached 1.0 limit at Sector-4.</div>
+          </div>
+          <div class="mab-item">
+            <div class="mab-time">8 mins ago</div>
+            <div class="mab-text">DGMS Dhanbad Zonal Inspector notified of active tension fissures.</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- MODALS -->
+
+  <!-- 1. Speaker Alert & PA Transmission Modal -->
+  <div id="modal-speaker" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <div>
+          <i class="fa-solid fa-bullhorn text-red"></i>
+          <h3>Public Address (PA) Mining Speaker Broadcast</h3>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-speaker')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Target Speaker Zone</label>
+          <select id="sp-zone" class="form-control">
+            <option value="ALL">All Dhanbad Mining Sectors (General Horns)</option>
+            <option value="JHR-S4" selected>Jharia Overburden Dump Sector-4 Horns</option>
+            <option value="LDN-D3">Lodna Deep Pit Fire Zone</option>
+            <option value="KSN-M2">Kusunda Mine East Bench</option>
+            <option value="BST-P2">Bastacolla Opencast Pit-2</option>
+            <option value="PIT-BOTTOM">Pit Bottom Excavator Fleet & Shovels</option>
+            <option value="HAUL-ROAD">Main Coal Haulage Road Speaker Array</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Alert Urgency & Siren Type</label>
+          <select id="sp-priority" class="form-control" onchange="updateDefaultPaMessage()">
+            <option value="HIGH" selected>🔴 HIGH: Immediate Evacuation Order (Piercing 800-1200Hz Siren)</option>
+            <option value="MODERATE">🟡 MODERATE: Active Slope Deformation Watch (Alert Chime)</option>
+            <option value="INFO">🟢 INFO: Routine Safety Shift Advisory</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Broadcast Message (English)</label>
+          <textarea id="sp-msg-en" class="form-control" rows="2">EMERGENCY ALERT: High slope displacement detected at Jharia Sector 4! Immediate bench evacuation ordered! All miners and HEMM operators move to Safe Shelter B immediately!</textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Broadcast Message (Hindi / हिन्दी)</label>
+          <textarea id="sp-msg-hi" class="form-control" rows="2">आपातकालीन चेतावनी! झरिया सेक्टर 4 में ढलान विफलता का भारी खतरा है! तुरंत सभी ऑपरेटर और श्रमिक बेंच खाली करें और सुरक्षित स्थान पर जाएं!</textarea>
+        </div>
+
+        <div class="speaker-preview-box">
+          <div class="spb-info">
+            <i class="fa-solid fa-volume-high text-cyan"></i>
+            <span>Synthesizer outputs audible 120 dB industrial evacuation siren + Web Speech voice broadcast!</span>
+          </div>
+        </div>
+
+        <div class="modal-foot">
+          <button class="btn btn-outline" onclick="testSirenAudio()"><i class="fa-solid fa-play"></i> Test Siren Tone</button>
+          <button class="btn btn-danger-solid" onclick="transmitSpeakerAlert()"><i class="fa-solid fa-tower-broadcast"></i> TRANSMIT TO MINE HORNS NOW</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Ambulance Dispatch Modal -->
+  <div id="modal-ambulance" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <div>
+          <i class="fa-solid fa-truck-medical text-red"></i>
+          <h3>Dispatch Emergency Ambulance — Dhanbad Sector</h3>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-ambulance')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Target Incident Location / Mining Bench</label>
+          <select id="amb-sector-select" class="form-control">
+            <option value="JHR-S4" selected>Jharia Overburden Dump Sector-4 (Pit Crest)</option>
+            <option value="LDN-D3">Lodna Deep Pit Fire Zone</option>
+            <option value="KSN-M2">Kusunda Mine East Bench</option>
+            <option value="BST-P2">Bastacolla Opencast Pit-2</option>
+            <option value="KTR-C1">Katras Colliery North Slope</option>
+            <option value="BHW-C3">Bhowra Colliery West Face</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Designated Hospital</label>
+          <select id="amb-hospital-select" class="form-control">
+            <option value="HOSP-BCCL" selected>BCCL Central Hospital, Koyla Nagar (7.2 km - Specialized Mining Trauma & Burn Unit)</option>
+            <option value="HOSP-SNMMCH">SNMMCH / PMCH Dhanbad (9.8 km - State Medical College)</option>
+            <option value="HOSP-ASARFI">Asarfi Hospital, Barwadda (12.5 km)</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group col-half">
+            <label>Estimated Casualties</label>
+            <input type="number" id="amb-cas-count" class="form-control" value="1" min="0" />
+          </div>
+          <div class="form-group col-half">
+            <label>Triage Priority</label>
+            <select id="amb-triage" class="form-control">
+              <option value="RED">RED — Life Threatening / Severe</option>
+              <option value="YELLOW" selected>YELLOW — Serious Fracture / Trauma</option>
+              <option value="GREEN">GREEN — Minor Walking Wounded</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Incident Details & Access Route Notes</label>
+          <textarea id="amb-notes" class="form-control" rows="2" placeholder="e.g. Slump debris on Bench 3 ramp. Access via Gate 4 Jharia."></textarea>
+        </div>
+
+        <div class="modal-foot">
+          <button class="btn btn-outline" onclick="closeModal('modal-ambulance')">Cancel</button>
+          <button class="btn btn-danger-solid" onclick="confirmAmbulanceDispatch()"><i class="fa-solid fa-truck-medical"></i> DISPATCH FIRST AVAILABLE ALS AMBULANCE</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Report Casualty Modal -->
+  <div id="modal-casualty" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <div>
+          <i class="fa-solid fa-bed-pulse text-amber"></i>
+          <h3>Log & Triage Mining Casualty</h3>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-casualty')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Injured Person Full Name</label>
+          <input type="text" id="cas-name" class="form-control" placeholder="e.g. Rameshwar Singh" />
+        </div>
+        <div class="form-row">
+          <div class="form-group col-half">
+            <label>Designation / Role</label>
+            <input type="text" id="cas-role" class="form-control" placeholder="e.g. Shovel Operator / Blasting Helper" />
+          </div>
+          <div class="form-group col-half">
+            <label>Triage Classification</label>
+            <select id="cas-triage-select" class="form-control">
+              <option value="RED">🔴 RED (Immediate Evac)</option>
+              <option value="YELLOW" selected>🟡 YELLOW (Urgent Care)</option>
+              <option value="GREEN">🟢 GREEN (Minor)</option>
+              <option value="BLACK">⚫ BLACK (Deceased)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Nature of Injuries & Medical Notes</label>
+          <textarea id="cas-injury-notes" class="form-control" rows="2" placeholder="Describe injuries and first aid provided..."></textarea>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-outline" onclick="closeModal('modal-casualty')">Cancel</button>
+          <button class="btn btn-primary-solid" onclick="submitCasualtyRecord()"><i class="fa-solid fa-check"></i> Register Casualty & Alert Hospital</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Report Missing Person / FIR Modal -->
+  <div id="modal-fir" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <div>
+          <i class="fa-solid fa-clipboard-user text-purple"></i>
+          <h3>Report Missing Personnel / File Emergency FIR</h3>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-fir')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Missing Worker Name</label>
+          <input type="text" id="fir-name" class="form-control" placeholder="e.g. Gopal Tudu" />
+        </div>
+        <div class="form-row">
+          <div class="form-group col-half">
+            <label>Job Designation</label>
+            <input type="text" id="fir-role" class="form-control" placeholder="e.g. Dozer Assistant" />
+          </div>
+          <div class="form-group col-half">
+            <label>Last Known Bench Location</label>
+            <input type="text" id="fir-loc" class="form-control" placeholder="e.g. Sector 4 East Berm Level 2" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Search Squad Assigned</label>
+          <select id="fir-squad" class="form-control">
+            <option value="DGMS Mine Rescue Squad Alpha">DGMS Mine Rescue Squad Alpha</option>
+            <option value="BCCL Safety Patrol">BCCL Safety Patrol</option>
+            <option value="NDRF 9th Battalion Bihar/Jharkhand">NDRF 9th Battalion</option>
+          </select>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-outline" onclick="closeModal('modal-fir')">Cancel</button>
+          <button class="btn btn-primary-solid" onclick="submitFirRecord()"><i class="fa-solid fa-file-signature"></i> Transmit FIR to Police & DGMS</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Threshold Configuration Modal -->
+  <div id="modal-thresholds" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <div>
+          <i class="fa-solid fa-sliders text-cyan"></i>
+          <h3>Configure Geotechnical & Rainfall Alert Thresholds</h3>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-thresholds')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="th-form-grid">
+          <div class="form-group">
+            <label>Critical 24h Rainfall (mm):</label>
+            <input type="number" id="th-rain-24" class="form-control" value="65.0" step="1" />
+          </div>
+          <div class="form-group">
+            <label>Hourly Rainfall Limit (mm/h):</label>
+            <input type="number" id="th-rain-1h" class="form-control" value="25.0" step="1" />
+          </div>
+          <div class="form-group">
+            <label>Displacement Rate (mm/day):</label>
+            <input type="number" id="th-disp-rate" class="form-control" value="12.0" step="0.5" />
+          </div>
+          <div class="form-group">
+            <label>Cumulative Displacement (mm):</label>
+            <input type="number" id="th-disp-cum" class="form-control" value="25.0" step="1" />
+          </div>
+          <div class="form-group">
+            <label>Critical Factor of Safety (FoS):</label>
+            <input type="number" id="th-fos-crit" class="form-control" value="1.00" step="0.05" />
+          </div>
+          <div class="form-group">
+            <label>Pore Water Pressure (kPa):</label>
+            <input type="number" id="th-pore-crit" class="form-control" value="110.0" step="5" />
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-outline" onclick="closeModal('modal-thresholds')">Cancel</button>
+          <button class="btn btn-primary-solid" onclick="saveThresholdChanges()"><i class="fa-solid fa-floppy-disk"></i> Save & Apply New Thresholds</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. IMD API Key Configuration Modal -->
+  <div id="modal-imd-key" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <div>
+          <i class="fa-solid fa-key text-amber"></i>
+          <h3>Connect Official IMD Weather API Key</h3>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-imd-key')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">
+          Enter your official API key from <code>api.imd.gov.in</code>. When empty or unauthorized, the system automatically uses real live meteorological telemetry from Dhanbad weather stations.
+        </p>
+        <div class="form-group">
+          <label>IMD API Key</label>
+          <input type="text" id="input-imd-api-key" class="form-control" placeholder="e.g. imd_api_key_xxxxxxxxxxxxx" />
+        </div>
+        <div id="imd-key-test-status" class="status-msg-box" style="display:none;"></div>
+        <div class="modal-foot">
+          <button class="btn btn-outline" onclick="testImdApiKey()"><i class="fa-solid fa-plug"></i> Test Connection</button>
+          <button class="btn btn-primary-solid" onclick="saveImdApiKey()"><i class="fa-solid fa-check"></i> Save Key</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. Mining Engineer Field Inspection Modal -->
+  <div id="modal-inspection" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <div>
+          <i class="fa-solid fa-clipboard-check text-cyan"></i>
+          <h3>Log Geotechnical Field Inspection</h3>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-inspection')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group col-half">
+            <label>Mining Engineer Name</label>
+            <input type="text" id="insp-name" class="form-control" value="Er. Sandeep Mukherjee" />
+          </div>
+          <div class="form-group col-half">
+            <label>Bench Elevation Level</label>
+            <input type="text" id="insp-bench" class="form-control" value="Bench Level +240m RL" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-half">
+            <label>Tension Crack Width (cm)</label>
+            <input type="number" id="insp-crack-w" class="form-control" value="7.2" step="0.1" />
+          </div>
+          <div class="form-group col-half">
+            <label>Crack Length (m)</label>
+            <input type="number" id="insp-crack-l" class="form-control" value="45.0" step="1" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Water Seepage Observation</label>
+          <select id="insp-seepage" class="form-control">
+            <option value="ACTIVE_SPRING_AT_TOE">Active spring / muddy water at toe</option>
+            <option value="DAMP_SEEPAGE">Damp seepage along bedding plane</option>
+            <option value="DRY">Dry bench face</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Engineer Recommendations</label>
+          <textarea id="insp-recom" class="form-control" rows="2">Immediate shovel retreat and dozer berm flattening.</textarea>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-outline" onclick="closeModal('modal-inspection')">Cancel</button>
+          <button class="btn btn-primary-solid" onclick="submitFieldInspection()"><i class="fa-solid fa-paper-plane"></i> Submit Inspection</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container"></div>
+
+  <!-- Audio Siren Elements -->
+  <audio id="siren-audio-player" preload="auto"></audio>
+
+  <!-- External Libraries -->
+  <!-- Leaflet GIS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- Three.js for 3D DEM -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+  <!-- Application Modules -->
+  <script src="js/dem3d.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
